@@ -25,6 +25,11 @@ When a user asks a question or makes a request, make a function call plan. You c
 - Write to a file (create or update)
 - Run a Python file with optional arguments
 
+When the user asks about the code project - they are referring to
+the working directory. So, you should typically start by looking at
+the project's files, and figuring out how to run the project and how
+to run its tests, you'll always want to test the tests and the actual project to verify that behavior is working.
+
 All paths you provide should be relative to the working directory. You do not need to specify the working directory in your function calls as it is automatically injected for security reasons.
 """
 
@@ -57,23 +62,35 @@ All paths you provide should be relative to the working directory. You do not ne
     # print(res.output_text)
 
     # USing Groq instead of gemini
-    res = client.models.generate_content(
-        model="gemini-2.5-flash", contents=messages, config=config
-    )
-    if verbose_flag:
-        print("User prompt:", prompt)
-        print("Prompt tokens:", res.usage_metadata.prompt_token_count)
-        print("Response tokens:", res.usage_metadata.candidates_token_count)
+    max_iters = 20
 
-    if res.function_calls:
-        for function_call in res.function_calls:
-            # print(f"Calling function: {function_call.name}({function_call.args})")
-            function_call_result = call_function(function_call,verbose_flag)
-            print(f"-> {function_call_result.parts[0].function_response.response}")
-    else:
-        print(res.text)
-    # print("Prompt tokens:",res.usage.input_tokens)
-    # print("Response tokens:" ,res.usage.output_tokens)
+    for i in range(max_iters):
+        res = client.models.generate_content(
+            model="gemini-2.5-flash", contents=messages, config=config
+        )
+        if verbose_flag:
+            print("User prompt:", prompt)
+            print("Prompt tokens:", res.usage_metadata.prompt_token_count)
+            print("Response tokens:", res.usage_metadata.candidates_token_count)
+
+        if res.candidates:
+            for candidate in res.candidates:
+                if candidate is None or candidate.content is None:
+                    continue
+                # print(f"Calling function: {function_call.name}({function_call.args})")
+                messages.append(candidate.content)
+        
+        if res.function_calls:
+            for function_call in res.function_calls:
+                function_call_result = call_function(function_call,verbose_flag)
+                # print(f"-> {function_call_result.parts[0].function_response.response}")
+                messages.append(function_call_result)
+        else:
+            print(res.text)
+            return
+
+        # print("Prompt tokens:",res.usage.input_tokens)
+        # print("Response tokens:" ,res.usage.output_tokens)
 
 
 if __name__ == "__main__":
